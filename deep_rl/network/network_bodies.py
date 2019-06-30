@@ -7,6 +7,29 @@
 from .network_utils import *
 
 
+class ConvStackBody(nn.Module):
+    def __init__(self, in_channels=4, in_w=32, in_h=32,
+                 kernels=[3,3,3,3], features=[32,32,32,32], strides=[2,2,2,2],gate=F.elu):
+        super(ConvStackBody, self).__init__()
+
+        self.gate=gate
+        expanded_features = [in_channels]+features
+        self.convs = []
+        h_w = (in_w, in_h)
+        for _ in range(len(kernels)):
+            self.convs.append(layer_init(nn.Conv2d(
+                expanded_features[_], expanded_features[_+1],
+                kernel_size=kernels[_], stride=strides[_])))
+            h_w = conv_output_shape(h_w, kernel_size=kernels[_], stride=strides[_])
+        self.feature_dim= h_w[0]*h_w[1]*features[-1]
+
+    def forward(self, x):
+        for conv in self.convs:
+            x = self.gate(conv(x))
+        x = x.view(x.size(0), -1)
+        return x
+
+
 class NatureConvBody(nn.Module):
     def __init__(self, in_channels=4):
         super(NatureConvBody, self).__init__()

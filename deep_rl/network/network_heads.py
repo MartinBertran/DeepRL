@@ -8,6 +8,35 @@ from .network_utils import *
 from .network_bodies import *
 
 
+
+class IcmNet(nn.Module, BaseNet):
+    def __init__(self, output_dim, body):
+        super(IcmNet, self).__init__()
+        self.forward_body = FCBody(body.feature_dim+1, hidden_units=(256,), gate=F.relu)
+        self.inverse_body = FCBody(2*body.feature_dim, hidden_units=(256,), gate=F.relu)
+        self.fc_forward = layer_init(nn.Linear(256, body.feature_dim))
+        self.fc_inverse = layer_init(nn.Linear(256, output_dim))
+        self.body = body
+        self.to(Config.DEVICE)
+
+    def forward(self, s_t, a_t, s_tp1):
+        # Feature extraction
+        phi_t = self.body(tensor(s_t))
+        phi_tp1 = self.body(tensor(s_tp1))
+
+        # Inverse dynamics
+        inverse_input = torch.cat((phi_t, phi_tp1), 1)
+        predicted_action_logits = self.fc_inverse(self.inverse_body(inverse_input))
+
+        #Forward dynamics
+        a_t = tensor(a_t).view(a_t.shape[0],1)
+        forward_input = torch.cat((phi_t, a_t), 1)
+        phi_hat_tp1 = self.fc_forward(self.forward_body(forward_input))
+
+        prediction_error = torch.norm(phi_tp1-phi_hat_tp1)
+
+        return prediction_error, predicted_action_logits
+
 class VanillaNet(nn.Module, BaseNet):
     def __init__(self, output_dim, body):
         super(VanillaNet, self).__init__()

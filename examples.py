@@ -391,6 +391,47 @@ def ppo_pixel(**kwargs):
     config.max_steps = int(2e7)
     run_steps(PPOAgent(config))
 
+# PPO ICM
+def ppo_icm_pixel(**kwargs):
+    generate_tag(kwargs)
+    kwargs.setdefault('log_level', 0)
+    config = Config()
+    config.merge(kwargs)
+
+    config.task_fn = lambda: Task(config.game, num_envs=config.num_workers)
+    config.eval_env = Task(config.game)
+    config.num_workers = 8
+    config.optimizer_fn = lambda params: torch.optim.RMSprop(params, lr=0.00025, alpha=0.99, eps=1e-5)
+    config.network_fn = lambda: CategoricalActorCriticNet(config.state_dim, config.action_dim, NatureConvBody())
+    config.state_normalizer = ImageNormalizer()
+    config.reward_normalizer = SignNormalizer()
+    config.discount = 0.99
+    config.use_gae = True
+    config.gae_tau = 0.95
+    config.entropy_weight = 0.01
+    config.gradient_clip = 0.5
+    config.rollout_length = 128
+    config.optimization_epochs = 3
+    config.mini_batch_size = 32 * 8
+    config.ppo_ratio_clip = 0.1
+    config.log_interval = 128 * 8
+    config.max_steps = int(2e7)
+
+    # Add tensorboard writer
+    #config.writer = SummaryWriter(log_dir='logs/ppo_icm_pixel')
+
+    #reward agent options
+    config.reward_exploration_steps = 5e5
+    config.reward_optimizer_fn = lambda params: torch.optim.Adam(params, lr=0.00025)
+    config.reward_network_fn = lambda: IcmNet(config.action_dim, ConvStackBody(in_channels=4,in_w=84, in_h=84))
+    config.reward_replay_fn =  lambda: Replay(memory_size=int(1e6), batch_size=64)
+    config.reward_beta = 0.2
+    config.reward_eta = 0.1
+    config.reward_agent =  lambda: IcmAgent(config)
+
+
+    run_steps(PPOICMAgent(config))
+
 
 def ppo_continuous(**kwargs):
     generate_tag(kwargs)
@@ -478,4 +519,4 @@ if __name__ == '__main__':
     # a2c_pixel(game=game)
     # n_step_dqn_pixel(game=game)
     # option_critic_pixel(game=game)
-    # ppo_pixel(game=game)
+    ppo_icm_pixel(game=game)
